@@ -1,15 +1,15 @@
-# PPE Detection — YOLO11
-# Датасеты и архивы
+# ============================================================
+# .gitignore для проекта PPE Detection (YOLO11)
+# ============================================================
+
+# --- Датасет (скачивается отдельно, ~178 МБ) ---
 datasets/
 *.zip
 *.rar
 *.tar.gz
 
-# Веса: сохраняем только выбранную обученную модель
-*.pt
-!runs/detect/train-16/weights/best.pt
-
-# Открываем каждый родительский каталог для исключений
+# --- Результаты обучения ---
+# Открываем путь к нужной модели через исключения
 /runs/*
 !/runs/detect/
 /runs/detect/*
@@ -23,13 +23,23 @@ datasets/
 !/runs/detect/train-16/confusion_matrix.png
 !/runs/detect/train-16/args.yaml
 
-# Экспорты
+# --- Предобученные веса (скачиваются автоматически) ---
+*.pt
+yolo11n.pt
+yolo11s.pt
+yolo11m.pt
+yolo11l.pt
+yolo11x.pt
+yolov8*.pt
+weights/
+
+# --- ONNX и другие экспорты ---
 *.onnx
 *.engine
 *.tflite
 *.torchscript
 
-# Python
+# --- Python ---
 __pycache__/
 *.py[cod]
 *$py.class
@@ -44,12 +54,16 @@ venv/
 env/
 ENV/
 
-# Jupyter и кэш
+# --- Jupyter и кэш ---
 .ipynb_checkpoints/
 *.ipynb_checkpoints
 *.cache
+*.jpg.cache
+*.jpeg.cache
+*.png.cache
+*.txt.cache
 
-# IDE
+# --- IDE ---
 .vscode/
 .vs/
 .idea/
@@ -57,19 +71,19 @@ ENV/
 *.swo
 *~
 
-# OS
+# --- OS ---
 Thumbs.db
 .DS_Store
 desktop.ini
 
-# Логи и временные файлы
+# --- Логи и временные файлы ---
 *.log
 logs/
 tmp/
 temp/
 *.tmp
 
-# Секреты
+# --- Секреты ---
 .env
 .env.*
 !.env.example

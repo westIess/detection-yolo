@@ -8,6 +8,7 @@ if __name__ == '__main__':
         imgsz=640,
         batch=4,
         device=0,
-        workers=8,
+        workers=0,
+        cache=False,
         patience=15,
     )
