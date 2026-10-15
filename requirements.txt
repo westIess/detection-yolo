@@ -1,0 +1,5 @@
+# Версия Ultralytics подтверждена метаданными best.pt.
+# PyTorch для CUDA устанавливается отдельно — см. README.
+ultralytics==8.4.177
+opencv-python>=4.9.0
+numpy>=1.23.0

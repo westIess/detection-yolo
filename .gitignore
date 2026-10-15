@@ -1,0 +1,77 @@
+# PPE Detection — YOLO11
+# Датасеты и архивы
+datasets/
+*.zip
+*.rar
+*.tar.gz
+
+# Веса: сохраняем только выбранную обученную модель
+*.pt
+!runs/detect/train-16/weights/best.pt
+
+# Открываем каждый родительский каталог для исключений
+/runs/*
+!/runs/detect/
+/runs/detect/*
+!/runs/detect/train-16/
+/runs/detect/train-16/*
+!/runs/detect/train-16/weights/
+/runs/detect/train-16/weights/*
+!/runs/detect/train-16/weights/best.pt
+!/runs/detect/train-16/results.csv
+!/runs/detect/train-16/results.png
+!/runs/detect/train-16/confusion_matrix.png
+!/runs/detect/train-16/args.yaml
+
+# Экспорты
+*.onnx
+*.engine
+*.tflite
+*.torchscript
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+*.egg-info/
+.eggs/
+venv/
+.venv/
+env/
+ENV/
+
+# Jupyter и кэш
+.ipynb_checkpoints/
+*.ipynb_checkpoints
+*.cache
+
+# IDE
+.vscode/
+.vs/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+Thumbs.db
+.DS_Store
+desktop.ini
+
+# Логи и временные файлы
+*.log
+logs/
+tmp/
+temp/
+*.tmp
+
+# Секреты
+.env
+.env.*
+!.env.example
+secrets.json
+api_keys.txt
