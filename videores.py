@@ -8,6 +8,8 @@ import argparse
 import json
 import math
 import time
+from datetime import datetime
+from uuid import uuid4
 
 BASE = Path(__file__).resolve().parent
 PPE_CONF = {'helmet': 0.20, 'safety-vest': 0.20, 'gloves': 0.20}
@@ -205,6 +207,63 @@ class SafetyState:
         self.last_event = {k: t for k, t in self.last_event.items() if k[0] not in expired}
 
 
+class ScreenshotStore:
+    """One annotated image per event-bearing frame plus its JSON metadata."""
+    def __init__(self, root, source, model):
+        self.folder = Path(root) / (datetime.now().strftime('%Y%m%d_%H%M%S')
+                                    + '_' + uuid4().hex[:8])
+        self.folder.mkdir(parents=True, exist_ok=False)
+        self.source, self.model = source, model
+        self.sequence = 0
+        print(f'Screenshots: {self.folder.resolve()}')
+
+    def save(self, frame, now, events, manual=False):
+        import cv2
+        self.sequence += 1
+        kind = 'manual' if manual else 'alert'
+        stem = f'{self.sequence:06d}_{kind}_{now:010.3f}s'
+        image_path = self.folder / (stem + '.jpg')
+        metadata_path = self.folder / (stem + '.json')
+        try:
+            ok, encoded = cv2.imencode('.jpg', frame)
+            if not ok:
+                raise OSError('JPEG encoding failed')
+            # Python handles Windows paths with Cyrillic, unlike some cv2.imwrite builds.
+            image_path.write_bytes(encoded.tobytes())
+            metadata_path.write_text(json.dumps({
+                'time_s': round(now, 3), 'saved_at': datetime.now().astimezone().isoformat(),
+                'source': self.source, 'model': self.model,
+                'manual': manual, 'events': events, 'image': image_path.name,
+            }, ensure_ascii=False, indent=2), encoding='utf-8')
+        except (OSError, cv2.error) as exc:
+            print(f'SCREENSHOT ERROR: {exc}', flush=True)
+            return None
+        print(f'Saved: {image_path}', flush=True)
+        return image_path
+
+
+def hold_frame(frame, store, now, events, eof=False):
+    """No reads, inference or automatic events while paused or at end of file."""
+    import cv2
+    view = frame.copy()
+    text = 'END: S save | Q/ESC exit' if eof else 'PAUSED: SPACE resume | S save | Q exit'
+    cv2.rectangle(view, (0, 80), (min(frame.shape[1]-1, 720), 115), (0, 0, 0), -1)
+    cv2.putText(view, text, (12, 105), cv2.FONT_HERSHEY_SIMPLEX,
+                0.6, (255, 255, 255), 2)
+    while True:
+        cv2.imshow(WINDOW, view)
+        key = cv2.waitKey(30) & 0xff
+        if key in (ord('q'), 27) or cv2.getWindowProperty(WINDOW, cv2.WND_PROP_VISIBLE) < 1:
+            return False
+        if key == ord('s'):
+            store.save(frame, now, events, manual=True)
+        if key == ord(' ') and not eof:
+            return True
+
+
+WINDOW = 'SH17 PPE | SPACE pause | S screenshot | Q quit'
+
+
 def main():
     import cv2
     import numpy as np
@@ -218,6 +277,7 @@ def main():
     parser.add_argument('--live', action='store_true', help='Wall clock for camera/RTSP')
     parser.add_argument('--zone-file', default=None, help='Explicit saved zone JSON')
     parser.add_argument('--setup-zone', action='store_true', help='Draw zone and exit')
+    parser.add_argument('--screenshots-dir', default=str(BASE/'screenshots'/'violations'))
     args = parser.parse_args()
     zone_path = Path(args.zone_file) if args.zone_file else BASE/'zone.json'
     source_key = args.source if (args.source.isdecimal() or '://' in args.source) else str(Path(args.source).resolve())
@@ -255,12 +315,21 @@ def main():
     zone_size = None
     if not args.zone_file:
         print('Zone DISABLED. Use --setup-zone, then --zone-file zone.json.')
+    store = ScreenshotStore(args.screenshots_dir, args.source, args.model)
     started, frame_no = time.monotonic(), 0
+    last_frame, last_events, now = None, [], 0.0
     try:
         while True:
+            tick = time.monotonic()
             ok, frame = cap.read()
             if not ok:
+                if last_frame is not None and not live:
+                    print('End of video. S saves the last frame; Q closes the window.')
+                    hold_frame(last_frame, store, now, last_events, eof=True)
+                elif live:
+                    print('Stream read failed.')
                 break
+            frame_events = []
             now = time.monotonic()-started if live else frame_no/fps
             frame_no += 1
             result = model.predict(frame, conf=0.10, iou=0.5, imgsz=640,
@@ -291,9 +360,10 @@ def main():
                 danger = zone is not None and cv2.pointPolygonTest(zone, foot, False) >= 0
                 visible = {k: assessable(box, k, width, height) for k in PPE_CONF}
                 statuses, events = state.update(pid, now, found[pid], ambiguous[pid], visible, danger)
+                frame_events.extend(events)
                 for event in events:
                     print(json.dumps(event, ensure_ascii=False), flush=True)
-                # Color answers the helmet question; red thick outline indicates zone.
+               
                 color = {'present': (0, 200, 0), 'missing': (0, 0, 255),
                          'unknown': (0, 200, 255)}[statuses['helmet']]
                 x1, y1, x2, y2 = map(int, box)
@@ -310,13 +380,21 @@ def main():
             cv2.rectangle(frame, (5, 5), (345, 48), (0, 0, 0), -1)
             cv2.putText(frame, f'Events: {state.total}  Time: {now:.1f}s', (12, 32),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
-            cv2.imshow('SH17 PPE control - Q to quit', frame)
-            key = cv2.waitKey(1) & 0xFF
-            if key == ord('q'):
+            if frame_events:
+                store.save(frame, now, frame_events)
+            last_frame, last_events = frame.copy(), frame_events
+            cv2.imshow(WINDOW, frame)
+            delay = 1 if live else max(1, math.ceil((1/fps - (time.monotonic()-tick))*1000))
+            key = cv2.waitKey(delay) & 0xff
+            if key in (ord('q'), 27) or cv2.getWindowProperty(WINDOW, cv2.WND_PROP_VISIBLE) < 1:
                 break
+            if key == ord('s'):
+                store.save(frame, now, frame_events, manual=True)
             if key == ord(' '):
-                cv2.waitKey(0)
-                break
+                if not hold_frame(frame, store, now, frame_events):
+                    break
+                if live:
+                    state.people.clear()
     finally:
         cap.release()
         cv2.destroyAllWindows()
