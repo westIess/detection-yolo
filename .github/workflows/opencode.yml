@@ -1,0 +1,33 @@
+name: opencode
+on:
+  issue_comment:
+    types: [created]
+  pull_request_review_comment:
+    types: [created]
+
+jobs:
+  opencode:
+    if: |
+      contains(github.event.comment.body, '/oc') ||
+      contains(github.event.comment.body, '/opencode')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+      - uses: anomalyco/opencode/github@latest
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # ВАЖНО: Здесь укажите ключ того провайдера, которым будете пользоваться
+          # Если это DeepSeek (вижу вкладку в браузере), то нужно будет добавить DEEPSEEK_API_KEY
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }} 
+        with:
+          use_github_token: true
+          # Модель должна соответствовать вашему ключу. 
+          # Если используете DeepSeek, формат будет: deepseek/deepseek-coder
+          model: anthropic/claude-sonnet-4-5 
