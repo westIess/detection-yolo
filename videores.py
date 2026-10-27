@@ -22,6 +22,15 @@ CONFIRM_SECONDS = 2.0
 MIN_OBSERVATIONS = 5
 HOLD_SECONDS = 0.8
 DEBOUNCE_SECONDS = 5.0
+# Опасная зона: человек должен непрерывно наблюдаться в ней не менее 0.5 с
+# и минимум 5 раз; выход или разрыв трека сбрасывает подтверждение.
+DANGER_CONFIRM_SECONDS = 0.5
+DANGER_MIN_OBSERVATIONS = 5
+# Минимальный правдоподобный размер человека (доли кадра). Отсекает мелкие
+# ложные рамки на столбах, сумках и других предметах.
+PERSON_MIN_WIDTH = 0.02
+PERSON_MIN_HEIGHT = 0.06
+PERSON_MIN_AREA = 0.002
 # No default polygon: zones must be explicitly configured for each source.
 
 
@@ -152,8 +161,21 @@ def assessable(box, name, width, height):
     return intersection(r, clipped) / max(area(r), 1) >= 0.95
 
 
+def plausible_person(box, width, height):
+    """Отсекает слишком мелкие рамки: обычно это ложные срабатывания на предметах."""
+    w = max(0.0, box[2]-box[0])
+    h = max(0.0, box[3]-box[1])
+    return (w >= width*PERSON_MIN_WIDTH and h >= height*PERSON_MIN_HEIGHT
+            and w*h >= width*height*PERSON_MIN_AREA)
+
+
 class SafetyState:
-    """Independent per stream; timestamps must increase (seconds)."""
+    """Состояние одного потока; время должно возрастать (секунды).
+
+    Для видео передаётся время видео (frame/fps), а не скорость обработки.
+    Событие опасной зоны требует непрерывной серии наблюдений в полигоне:
+    не меньше DANGER_CONFIRM_SECONDS и DANGER_MIN_OBSERVATIONS.
+    """
     def __init__(self):
         self.people = {}
         self.last_event = {}
@@ -162,11 +184,16 @@ class SafetyState:
     def update(self, pid, now, seen, unknown, visible, danger):
         s = self.people.get(pid)
         if s is None:
-            s = {'last': now, 'ppe': {}}
+            s = {'last': now, 'ppe': {}, 'danger': False,
+                 'danger_since': None, 'danger_n': 0}
             self.people[pid] = s
-        # Do not accumulate missing evidence during a tracking gap.
+        # При разрыве трека не накапливаем ни признаки отсутствия СИЗ,
+        # ни нахождение в опасной зоне.
         if now-s['last'] > 0.5:
             s['ppe'].clear()
+            s['danger'] = False
+            s['danger_since'] = None
+            s['danger_n'] = 0
         s['last'] = now
         statuses = {}
         for name in PPE_CONF:
@@ -186,8 +213,23 @@ class SafetyState:
                 status = ('missing' if now-v['start'] >= CONFIRM_SECONDS
                           and v['n'] >= MIN_OBSERVATIONS else 'unknown')
             statuses[name] = status
-        kinds = [f'no_{k}' for k in REQUIRED if statuses[k] == 'missing']
         if danger:
+            # Первое наблюдение запускает отсчёт, дальше считаем длительность и число кадров.
+            if s['danger_since'] is None:
+                s['danger_since'] = now
+                s['danger_n'] = 1
+            else:
+                s['danger_n'] += 1
+            if (not s['danger'] and s['danger_n'] >= DANGER_MIN_OBSERVATIONS
+                    and now-s['danger_since'] >= DANGER_CONFIRM_SECONDS):
+                s['danger'] = True
+        else:
+            # Вышел из зоны — подтверждение сбрасывается, новый вход считается заново.
+            s['danger'] = False
+            s['danger_since'] = None
+            s['danger_n'] = 0
+        kinds = [f'no_{k}' for k in REQUIRED if statuses[k] == 'missing']
+        if s['danger']:
             kinds.append('danger_zone')
         events = []
         for kind in kinds:
@@ -228,7 +270,6 @@ class ScreenshotStore:
             ok, encoded = cv2.imencode('.jpg', frame)
             if not ok:
                 raise OSError('JPEG encoding failed')
-            # Python handles Windows paths with Cyrillic, unlike some cv2.imwrite builds.
             image_path.write_bytes(encoded.tobytes())
             metadata_path.write_text(json.dumps({
                 'time_s': round(now, 3), 'saved_at': datetime.now().astimezone().isoformat(),
@@ -357,7 +398,9 @@ def main():
             for p in people:
                 pid, box = p['id'], p['box']
                 foot = ((box[0]+box[2])/2, box[3])
-                danger = zone is not None and cv2.pointPolygonTest(zone, foot, False) >= 0
+                # Мелкие ложные рамки не считаем человеком для алерта зоны.
+                danger = (zone is not None and plausible_person(box, width, height)
+                          and cv2.pointPolygonTest(zone, foot, False) >= 0)
                 visible = {k: assessable(box, k, width, height) for k in PPE_CONF}
                 statuses, events = state.update(pid, now, found[pid], ambiguous[pid], visible, danger)
                 frame_events.extend(events)
@@ -399,7 +442,6 @@ def main():
         cap.release()
         cv2.destroyAllWindows()
     print(f'Total events: {state.total}')
-
 
 if __name__ == '__main__':
     main()
