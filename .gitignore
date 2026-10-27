@@ -89,3 +89,4 @@ temp/
 !.env.example
 secrets.json
 api_keys.txt
+screenshots/violations/
