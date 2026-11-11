@@ -1,0 +1,13 @@
+version: '3.8'
+
+services:
+  ppe-app:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./best_v2.pt:/app/best_v2.pt
+      - ./videos:/app/videos
+      - ./zone.json:/app/zone.json
+    environment:
+      - PYTHONUNBUFFERED=1
