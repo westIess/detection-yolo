@@ -89,8 +89,8 @@ def load_zone(path, source, width, height):
     import cv2
     import numpy as np
     data = json.loads(path.read_text(encoding='utf-8'))
-    if data.get('version') != 1 or data.get('source') != source:
-        raise ValueError('Zone belongs to another source. Run --setup-zone again.')
+    if data.get('version') != 1:
+        raise ValueError('Invalid zone version')
     old_w, old_h = data['frame_size']
     if old_w <= 0 or old_h <= 0 or abs((width/height)/(old_w/old_h)-1) > 0.01:
         raise ValueError('Frame aspect ratio changed. Run --setup-zone again.')

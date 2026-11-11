@@ -4,6 +4,8 @@ import asyncio
 import json
 import threading
 import time
+import os
+import urllib.request 
 
 import cv2
 import numpy as np
@@ -18,7 +20,7 @@ BASE = Path(__file__).resolve().parent
 MODEL_PATH = BASE / "best_v2.pt"
 VIDEO_PATH = BASE / "videos" / "construction.mp4"
 ZONE_PATH = BASE / "zone.json"
-DEVICE = "0"
+DEVICE = "cpu"
 CONF_THRESHOLD = 0.10
 IOU_THRESHOLD = 0.5
 JPEG_QUALITY = 70
@@ -246,4 +248,4 @@ async def ws_endpoint(ws: WebSocket):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="127.0.0.1", port=8000)
+    uvicorn.run(app, host="0.0.0.0", port=8000)
