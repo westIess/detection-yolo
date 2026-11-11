@@ -3,10 +3,9 @@ import numpy as np
 import onnxruntime as ort
 from pathlib import Path
 
-# Путь к датасету — тот, где реально лежат картинки
+# Путь к датасету 
 DATASET_ROOT = Path("C:/Users/wlkvc/PyCharmMiscProject/datasets/construction-ppe")
 
-# Ищем первую картинку в test/val/train
 img_path = None
 for split in ["test", "val", "train"]:
     folder = DATASET_ROOT / "images" / split
