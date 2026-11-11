@@ -1,7 +1,3 @@
-"""SH17: YOLO detections -> person tracking -> PPE association -> events.
-Run: python videores.py --device 0
-Labels use ASCII because OpenCV putText does not render Cyrillic.
-"""
 from pathlib import Path
 from types import SimpleNamespace
 import argparse
