@@ -1,4 +1,3 @@
-"""Тесты подтверждения опасной зоны. Модель, CUDA и видео не нужны."""
 import unittest
 
 from videores import (DANGER_CONFIRM_SECONDS, DANGER_MIN_OBSERVATIONS, PPE_CONF,
